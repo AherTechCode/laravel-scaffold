@@ -1,0 +1,57 @@
+<?php
+
+namespace App\Services;
+
+use App\Repositories\{{modelName}}Repository;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Imports\{{modelName}}Import;
+
+class {{modelName}}Service
+{
+    protected $repository;
+
+    public function __construct({{modelName}}Repository $repository)
+    {
+        $this->repository = $repository;
+    }
+
+    public function getAll()
+    {
+        return $this->repository->getAll();
+    }
+
+    public function getById($id)
+    {
+        return $this->repository->getById($id);
+    }
+
+    public function create(array $data)
+    {
+        return $this->repository->create($data);
+    }
+
+    public function update($id, array $data)
+    {
+        return $this->repository->update($id, $data);
+    }
+
+    public function delete($id)
+    {
+        return $this->repository->delete($id);
+    }
+
+    public function massUpload($file)
+    {
+        try {
+            Excel::import(new {{modelName}}Import, $file);
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    public function search($column, $value)
+    {
+        return $this->repository->search($column, $value);
+    }
+}

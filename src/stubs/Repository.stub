@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Repositories;
+
+use App\Models\{{modelName}};
+
+class {{modelName}}Repository
+{
+    public function getAll()
+    {
+        return {{modelName}}::all();
+    }
+
+    public function getById($id)
+    {
+        return {{modelName}}::findOrFail($id);
+    }
+
+    public function create(array $data)
+    {
+        return {{modelName}}::create($data);
+    }
+
+    public function update($id, array $data)
+    {
+        $record = {{modelName}}::findOrFail($id);
+        $record->update($data);
+        return $record;
+    }
+
+    public function delete($id)
+    {
+        $record = {{modelName}}::findOrFail($id);
+        $record->delete();
+    }
+
+    public function search($column, $value)
+    {
+        return {{modelName}}::where($column, 'like', '%' . $value . '%')->get();
+    }
+}

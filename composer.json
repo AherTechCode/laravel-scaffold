@@ -1,0 +1,40 @@
+{
+    "name": "ahertl/laravel-scaffold",
+    "description": "A package to scaffold CRUD operations and services for Laravel",
+    "type": "library",
+    "require": {
+        "maatwebsite/excel": "^3.1",
+        "php": "^8.0"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Ahertl\\LaravelScaffold\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "version": "1.0.0",
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Ahertl\\LaravelScaffold\\Providers\\LaravelScaffoldServiceProvider"
+            ]
+        }
+    },
+    "authors": [
+        {
+            "name": "Abayomi Apetu",
+            "email": "abayomismart@gmail.com"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "/home/netplus/Documents/Abayomi/AHERTL/laravel-scaffold",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
+}
