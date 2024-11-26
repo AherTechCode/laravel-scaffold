@@ -7,10 +7,11 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
+
 class LaravelScaffoldCommand extends Command
 {
-    protected $signature = 'laravel:scaffold {model} {--module=} {--table=} {--mass_upload}';
-    protected $description = 'Scaffold CRUD (Service, Repository, Controller, Import) for a given model, with optional module support';
+    protected $signature = 'laravel:scaffold {model} {--module=} {--table=} {--mass_upload} {--routes}';
+    protected $description = 'Scaffold CRUD (Service, Repository, Controller, Import, and Routes) for a given model, with optional module support';
 
     public function handle()
     {
@@ -18,6 +19,7 @@ class LaravelScaffoldCommand extends Command
         $module = $this->option('module');
         $table = $this->option('table') ?: Str::snake(Str::plural($model));
         $massUpload = $this->option('mass_upload');
+        $generateRoutes = $this->option('routes');
 
         $isModular = $module !== null;
 
@@ -45,6 +47,11 @@ class LaravelScaffoldCommand extends Command
             $this->createImportClass($basePath, $model, $columns, $isModular);
         }
 
+        // If the --routes option is provided, generate routes
+        if ($generateRoutes) {
+            $this->generateRoutes($model, $isModular);
+        }
+
         $this->info("CRUD scaffolding complete for {$model}" . ($isModular ? " in module {$module}" : '') . '.');
     }
 
@@ -69,7 +76,7 @@ class LaravelScaffoldCommand extends Command
     protected function createModel($basePath, $model, $columns, $isModular)
     {
         $namespace = $isModular ? "App\\Modules\\{{module}}\\Models" : "App\\Models";
-        $modelStub = $this->getStub('Model.stub');
+        $modelStub = ($model == "User") ? $this->getStub('UserModel.stub') : $this->getStub('Model.stub');
         $fillable = $this->generateFillable($columns);
         $modelContent = str_replace(
             ['{{modelName}}', '{{namespace}}', '{{fillable}}'],
@@ -88,7 +95,7 @@ class LaravelScaffoldCommand extends Command
     protected function createService($basePath, $model, $isModular)
     {
         $namespace = $isModular ? "App\\Modules\\{{module}}\\Services" : "App\\Services";
-        $serviceStub = $this->getStub('Service.stub');
+        $serviceStub = ($model == "User") ? $this->getStub('UserService.stub') : $this->getStub('Service.stub');
         $serviceContent = str_replace(['{{modelName}}', '{{namespace}}'], [$model, $namespace], $serviceStub);
         $servicePath = $isModular ? "{$basePath}/Services/{$model}Service.php" : app_path("Services/{$model}Service.php");
         File::put($servicePath, $serviceContent);
@@ -106,7 +113,7 @@ class LaravelScaffoldCommand extends Command
     protected function createController($basePath, $model, $massUpload, $columns, $isModular)
     {
         $namespace = $isModular ? "App\\Modules\\{{module}}\\Http\\Controllers" : "App\\Http\\Controllers";
-        $controllerStub = $this->getStub('Controller.stub');
+        $controllerStub = ($model == "User") ? $this->getStub('UserController.stub') : $this->getStub('Controller.stub');
         $controllerContent = str_replace('{{modelName}}', $model, $controllerStub);
 
         if ($massUpload) {
@@ -126,7 +133,7 @@ class LaravelScaffoldCommand extends Command
     protected function createImportClass($basePath, $model, $columns, $isModular)
     {
         $namespace = $isModular ? "{{App\\Modules\\{{module}}}}\\Imports" : "App\\Imports";
-        $importStub = $this->getStub('Import.stub'); 
+        $importStub = ($model == "User") ? $this->getStub('UserImport.stub') : $this->getStub('Import.stub'); 
         $importContent = str_replace(
             ['{{modelName}}', '{{namespace}}', '{{columnMappings}}'],
             [$model, $namespace, $this->generateColumnMappings($columns)],
@@ -142,6 +149,42 @@ class LaravelScaffoldCommand extends Command
         File::put($importFile, $importContent);
     }
 
+    protected function generateRoutes($model, $isModular)
+    {
+        $routePath = $isModular
+            ? app_path("Modules/{$module}/routes/api.php")
+            : base_path("routes/api.php");
+
+        // Check if routes/api.php exists
+        if (!File::exists($routePath)) {
+            $this->error("The route file {$routePath} does not exist.");
+            return;
+        }
+
+        // Load the route file contents
+        $routeContents = File::get($routePath);
+
+        // Define the API routes for the model
+        $modelRoutes = "
+            Route::prefix('{$model}')->group(function () {
+                Route::get('/', [{$model}Controller::class, 'index']);
+                Route::post('/', [{$model}Controller::class, 'store']);
+                Route::get('{id}', [{$model}Controller::class, 'show']);
+                Route::put('{id}', [{$model}Controller::class, 'update']);
+                Route::delete('{id}', [{$model}Controller::class, 'destroy']);
+            });
+        ";
+
+        // Append the model routes to the route file
+        $routeContents .= "\n" . $modelRoutes;
+
+        // Save the updated route file
+        File::put($routePath, $routeContents);
+
+        $this->info("API routes for {$model} have been added to {$routePath}");
+    }
+
+
     protected function generateColumnMappings($columns)
     {
         return implode(",\n            ", array_map(function ($col) {
@@ -154,11 +197,11 @@ class LaravelScaffoldCommand extends Command
         $stubPath = base_path("stubs/vendor/laravel-scaffold/{$stubName}");
 
         if (File::exists($stubPath)) {
-            // Use the user's customized stub
+            //Use the user's customized stub
             return File::get($stubPath);
         }
 
-        // Use the default stub from the package
+        //Use the default stub from the package
         return File::get(__DIR__ . "/../stubs/{$stubName}");
     }
 

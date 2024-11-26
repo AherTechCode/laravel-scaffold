@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Services;
+
+use App\Repositories\{{modelName}}Repository;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Imports\{{modelName}}Import;
+
+class {{modelName}}Service
+{
+    protected $repository;
+
+    public function __construct({{modelName}}Repository $repository)
+    {
+        $this->repository = $repository;
+    }
+
+    public function getAll()
+    {
+        return $this->repository->getAll();
+    }
+
+    public function getById($id)
+    {
+        return $this->repository->getById($id);
+    }
+
+    public function create(array $data)
+    {
+        return $this->repository->create($data);
+    }
+
+    public function update($id, array $data)
+    {
+        return $this->repository->update($id, $data);
+    }
+
+    public function delete($id)
+    {
+        return $this->repository->delete($id);
+    }
+
+    public function massUpload($file)
+    {
+        try {
+            Excel::import(new {{modelName}}Import, $file);
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    public function resetPassword($email)
+    {
+        // Logic to reset password (e.g., generating token, sending email)
+        $user = User::where('email', $email)->first();
+        if (!$user) {
+            throw new \Exception('User not found');
+        }
+
+        // Send reset link or token (you can use Laravel's built-in password broker)
+        return Password::sendResetLink(['email' => $email]);
+    }
+
+    public function changePassword($user, array $data)
+    {
+        if (!Hash::check($data['current_password'], $user->password)) {
+            throw new \Exception('Current password does not match');
+        }
+
+        $user->password = Hash::make($data['new_password']);
+        $user->save();
+        return $user;
+    }
+
+    public function search($column, $value)
+    {
+        return $this->repository->search($column, $value);
+    }
+}

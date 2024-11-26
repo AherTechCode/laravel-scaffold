@@ -46,3 +46,12 @@ Here is the folder/directory structure for a simple application not made into mo
 The directory structure for a modularized application
 
 ![1729778031062](image/README/1729778031062.png)
+
+`"repositories":[
+    {
+        "type":"path",
+        "url":"/home/netplus/Documents/Abayomi/AHERTL/laravel-scaffold","options":{
+            "symlink":true
+        }
+    }
+]`

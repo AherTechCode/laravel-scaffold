@@ -14,7 +14,6 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "version": "1.0.0",
     "extra": {
         "laravel": {
             "providers": [
@@ -26,15 +25,6 @@
         {
             "name": "Abayomi Apetu",
             "email": "abayomismart@gmail.com"
-        }
-    ],
-    "repositories": [
-        {
-            "type": "path",
-            "url": "/home/netplus/Documents/Abayomi/AHERTL/laravel-scaffold",
-            "options": {
-                "symlink": true
-            }
         }
     ]
 }
