@@ -56,4 +56,4 @@ The directory structure for a modularized application
     }
 ]`
 
-Update token for packagist webhook
+Update token for packagist webhook.
