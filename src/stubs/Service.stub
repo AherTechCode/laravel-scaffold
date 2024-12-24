@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace {{namespace}};
 
 use App\Repositories\{{modelName}}Repository;
 use Maatwebsite\Excel\Facades\Excel;
