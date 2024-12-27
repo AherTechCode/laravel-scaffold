@@ -153,17 +153,18 @@ class LaravelScaffoldCommand extends Command
     protected function generateRoutes($model, $isModular, $module)
     {
         $routePath = $isModular
-            ? app_path("Modules/{$module}/Routes/api.php")
-            : base_path("routes/api.php");
-
+            ? app_path("Modules/{$module}/routes")
+            : base_path("routes");
+        
+        $routeFile = $routePath ."/api.php";
         // Check if routes/api.php exists
         if (!File::exists($routePath)) {
-            $this->error("The route file {$routePath} does not exist.");
-            return;
+            mkdir($routePath,077, true);
+            touch($routeFile);
         }
 
         // Load the route file contents
-        $routeContents = File::get($routePath);
+        $routeContents = File::get($routeFile);
         if (empty($routeContents)) {
             $routeContents = "<?php\n    \nuse Illuminate\Support\Facades\Route;\n\n";
         }
@@ -175,9 +176,9 @@ class LaravelScaffoldCommand extends Command
         $routeContents .= "\n" . $modelRoutes;
 
         // Save the updated route file
-        File::put($routePath, $routeContents);
+        File::put($routeFile, $routeContents);
 
-        $this->info("API routes for {$model} have been added to {$routePath}");
+        $this->info("API routes for {$model} have been added to {$routeFile}");
     }
 
 
