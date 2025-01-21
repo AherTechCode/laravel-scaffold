@@ -57,3 +57,9 @@ The directory structure for a modularized application
 ]`
 
 Update token for packagist webhook.
+
+### Changes
+There is an update on the command that now make all generated code to work seamless. You can now generate and use your code immediately without any any changes.
+You will only need to add your business logic on the application. The CRUD operation on all table now work out of the box, with the option of uploads.
+
+You might need to add some null null coalescing on the rows for the import class to take care of table columns that are nullable and would not necessarily be provide by the user in the uploaded file.

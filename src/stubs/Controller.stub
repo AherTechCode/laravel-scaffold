@@ -4,7 +4,7 @@ namespace {{namespace}};
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use App\Services\{{modelName}}Service;
+{{importService}}
 
 class {{modelName}}Controller extends Controller
 {

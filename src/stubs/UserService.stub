@@ -2,9 +2,8 @@
 
 namespace {{namespace}};
 
-use App\Repositories\{{modelName}}Repository;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Imports\{{modelName}}Import;
+{{serviceImports}}
 
 class {{modelName}}Service
 {
