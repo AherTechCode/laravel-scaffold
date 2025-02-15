@@ -3,25 +3,31 @@
 namespace Ahertl\LaravelScaffold\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 
 class LaravelScaffoldCommand extends Command
 {
     protected $signature = 'laravel:scaffold {model} {--module=} {--table=} {--mass_upload} {--routes}';
     protected $description = 'Scaffold CRUD (Service, Repository, Controller, Import, and Routes) for a given model, with optional module support';
-    protected $excludeCols = ["id","created_at","updated_at"];
-    protected $excludeColsUpl = ["user_id","owner_id"];
+    protected $exemptTable = ["migrations","sessions","migration","session","jobs","job","cache",
+        "cache_locks","personal_access_tokens","password_reset_tokens","failed_jobs"];
+    protected $exemptColumn = ["id","owner_id","user_id","accountable_id","accountable_type",
+        'api_token','remember_token','email_verified_at','created_at','updated_at'];
 
     public function handle()
     {
         $model = $this->argument('model');
-        $module = $this->option('module') ?: "";
+        $module = $this->option('module');
         $table = $this->option('table') ?: Str::snake(Str::plural($model));
         $massUpload = $this->option('mass_upload');
         $generateRoutes = $this->option('routes');
+
+        if (in_array($table, $this->exemptTable)) return;
 
         $isModular = $module !== null;
 
@@ -41,12 +47,12 @@ class LaravelScaffoldCommand extends Command
         $columns = $this->getTableColumns($table);
 
         $this->createModel($basePath, $model, $columns, $isModular, $module);
-        $this->createService($basePath, $model, $isModular,$module);
-        $this->createRepository($basePath, $model, $isModular,$module);
-        $this->createController($basePath, $model, $massUpload, $columns, $isModular,$module);
+        $this->createService($basePath, $model, $isModular, $module);
+        $this->createRepository($basePath, $model, $isModular, $columns, $module);
+        $this->createController($basePath, $model, $massUpload, $isModular, $module);
 
         if ($massUpload) {
-            $this->createImportClass($basePath, $model, $columns, $isModular,$module);
+            $this->createImportClass($basePath, $model, $columns, $isModular, $module);
         }
 
         // If the --routes option is provided, generate routes
@@ -72,17 +78,58 @@ class LaravelScaffoldCommand extends Command
 
     protected function getTableColumns($table)
     {
-        return Schema::getColumnListing($table);
+        $columns = DB::select("
+            SELECT COLUMN_NAME, COLUMN_KEY, DATA_TYPE, COLUMN_TYPE
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA=? AND TABLE_NAME=?",[env('DB_DATABASE'), $table]);
+
+        return $columns;
     }
 
-    protected function createModel($basePath, $model, $columns, $isModular, $module)
+    protected function getRefTable($model, $col) {
+        $tab = Str::snake(Str::plural($model));
+        $refTable = DB::select("
+        SELECT REFERENCED_TABLE_NAME AS referenced_table
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+        AND REFERENCED_TABLE_NAME IS NOT NULL;", [env('DB_DATABASE'), $tab, $col]);
+
+        return $refTable[0]->referenced_table;
+    }
+    protected function makefnName($model, $str) {
+        return Str::singular($this->getRefTable($model, $str));
+    }
+
+    protected function makePascalName($model, $str) {
+        return Str::studly(Str::singular($this->getRefTable($model, $str)));
+    }
+
+    protected function makeClassName($model, $str) {
+        $str = str_replace("owner", "user", $str);
+        $className = $this->makePascalName($model, $str) . "::class";
+        return [$className, "'".$str."'"];
+    }
+
+    protected function createModel($basePath, $model, $cols, $isModular, $module)
     {
+        $relationships = "";
+        $fkFields = array_map(fn($col) => $col->COLUMN_NAME, array_filter($cols, fn($col) => $col->COLUMN_KEY == "MUL"));
+        if (sizeof($fkFields) > 0) {
+            $relationships .= implode("\n", array_map(fn($item)=>"
+    public function ".$this->makefnName($model, $item)."() {
+        return \$this->belongsTo(".implode(", ", $this->makeClassName($model, $item)).");
+    }
+            ", $fkFields));
+        }
+        $columns = array_filter(array_map(fn($item) => $item->COLUMN_NAME, $cols), fn($col) => !in_array($col, $this->exemptColumn));
         $namespace = $isModular ? "App\\Modules\\{$module}\\Models" : "App\\Models";
         $modelStub = ($model == "User") ? $this->getStub('UserModel.stub') : $this->getStub('Model.stub');
         $fillable = $this->generateFillable($columns);
         $modelContent = str_replace(
-            ['{{modelName}}', '{{namespace}}', '{{fillable}}'],
-            [$model, $namespace, $fillable],
+            ['{{modelName}}', '{{namespace}}', '{{fillable}}','{{relationships}}'],
+            [$model, $namespace, $fillable, $relationships],
             $modelStub
         );
         $modelPath = $isModular ? "{$basePath}/Models/{$model}.php" : app_path("Models/{$model}.php");
@@ -91,7 +138,6 @@ class LaravelScaffoldCommand extends Command
 
     protected function generateFillable($columns)
     {
-        $columns = array_filter($columns, fn($item) => !in_array($item, $this->excludeCols));
         return implode(",\n        ", array_map(fn($col) => "'$col'", $columns));
     }
 
@@ -106,22 +152,32 @@ class LaravelScaffoldCommand extends Command
         File::put($servicePath, $serviceContent);
     }
 
-    protected function createRepository($basePath, $model, $isModular, $module)
+    protected function createRepository($basePath, $model, $isModular, $columns, $module)
     {
+        $fetchStr = "";
+        $fetchSingleStr = "";
+        $fkFields = array_map(fn($col) => $col->COLUMN_NAME, array_filter($columns, fn($col) => $col->COLUMN_KEY == "MUL"));
+        if(sizeof($fkFields) > 0) {
+            $fetchStr .= " $model::with([".implode(", ", array_map(fn($item) => "'".$this->makefnName($model, $item)."'", $fkFields))."])->get();";
+            $fetchSingleStr .= " $model::with([".implode(", ", array_map(fn($item) => "'".$this->makefnName($model,$item)."'", $fkFields))."])->findOrFail(\$id);";
+        } else {
+            $fetchStr .= " $model::all();";
+            $fetchSingleStr .= " $model::findOrFail(\$id);";
+        }
         $namespace = $isModular ? "App\\Modules\\{$module}\\Repositories" : "App\\Repositories";
         $modelImports = $isModular ? "use App\\Modules\\{$module}\Models\\{$model};" : "use App\\Models\\{$model};";
         $repositoryStub = $this->getStub('Repository.stub');
-        $repositoryContent = str_replace(['{{modelName}}', '{{namespace}}','{{modelImports}}'], [$model, $namespace,$modelImports], $repositoryStub);
+        $repositoryContent = str_replace(['{{modelName}}', '{{namespace}}', '{{modelImports}}','{{fetchStr}}',"{{fetchSingleStr}}"], [$model, $namespace, $modelImports, $fetchStr, $fetchSingleStr], $repositoryStub);
         $repositoryPath = $isModular ? "{$basePath}/Repositories/{$model}Repository.php" : app_path("Repositories/{$model}Repository.php");
         File::put($repositoryPath, $repositoryContent);
     }
 
-    protected function createController($basePath, $model, $massUpload, $columns, $isModular, $module)
+    protected function createController($basePath, $model, $massUpload, $isModular, $module)
     {
         $namespace = $isModular ? "App\\Modules\\{$module}\\Http\\Controllers" : "App\\Http\\Controllers";
         $importService = $isModular ? "use App\\Modules\\{$module}\\Services\\{$model}Service;" : "use App\\Services\\{$model}Service;";
         $controllerStub = ($model == "User") ? $this->getStub('UserController.stub') : $this->getStub('Controller.stub');
-        $controllerContent = str_replace(['{{modelName}}','{{namespace}}','{{importService}}'], [$model, $namespace, $importService], $controllerStub);
+        $controllerContent = str_replace(['{{modelName}}','{{namespace}}','{{importService}}'], [$model, $namespace, $importService], $controllerStub); 
 
         if ($massUpload) {
             $massUploadFunction = $this->getStub('MassUploadFunction.stub');
@@ -139,14 +195,15 @@ class LaravelScaffoldCommand extends Command
 
     protected function createImportClass($basePath, $model, $columns, $isModular, $module)
     {
-        $namespace = $isModular ? "App\\Modules\\{$module}\\Imports" : "App\\Imports";
+        $namespace = $isModular ? "{{App\\Modules\\{$module}}}\\Imports" : "App\\Imports";
         $modelImport = $isModular ? "use App\\Modules\\{$module}\\Models\\{$model};" : "use App\\Models\\{$model};";
         $importStub = ($model == "User") ? $this->getStub('UserImport.stub') : $this->getStub('Import.stub'); 
         $importContent = str_replace(
             ['{{modelName}}', '{{namespace}}', '{{columnMappings}}','{{modelImport}}'],
             [$model, $namespace, $this->generateColumnMappings($columns),$modelImport],
             $importStub
-        );
+        ); 
+
         $importPath = "{$basePath}/Imports";
         $importFile = "{$importPath}/{$model}Import.php"; 
         
@@ -154,7 +211,7 @@ class LaravelScaffoldCommand extends Command
             mkdir($importPath, 0755, true);
         } 
 
-        File::put($importFile, $importContent);
+        File::put($importFile, $importContent);        
     }
 
     protected function generateRoutes($model, $isModular, $module)
@@ -175,7 +232,7 @@ class LaravelScaffoldCommand extends Command
         $routeContents = File::get($routeFile);
 
         // Define the API routes for the model
-        $routePref =str_replace('_','-', Str::snake(Str::plural($model)));
+        $routePref = str_replace('_','-', Str::snake(Str::plural($model)));
         $modelRoutes = "Route::prefix('{$routePref}')->group(function () {\n    Route::get('/', [{$model}Controller::class, 'index']);\n    Route::post('/', [{$model}Controller::class, 'store']);\n    Route::get('{id}', [{$model}Controller::class, 'show']);\n    Route::put('{id}', [{$model}Controller::class, 'update']);\n    Route::delete('{id}', [{$model}Controller::class, 'destroy']);\n});\n\n";
 
         if(!empty($routeContents)) {
@@ -197,9 +254,9 @@ class LaravelScaffoldCommand extends Command
     }
 
 
-    protected function generateColumnMappings($columns)
+    protected function generateColumnMappings($cols)
     {
-        $columns = array_filter($columns, fn($item) => !in_array($item, array_merge($this->excludeCols, $this->excludeColsUpl)));
+        $columns = array_map(fn($item) => $item->COLUMN_NAME, $cols);
         return implode(",\n            ", array_map(function ($col) {
             return "'$col' => \$row['$col']";
         }, $columns));

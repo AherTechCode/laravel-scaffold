@@ -12,8 +12,7 @@ class {{modelName}}Import implements ToModel, WithHeadingRow
     public function model(array $row)
     {
         return new {{modelName}}([
-            {{columnMappings}},
-            'password' => bcrypt($row['password']), // Make sure passwords are hashed
+            {{columnMappings}}
         ]);
     }
 

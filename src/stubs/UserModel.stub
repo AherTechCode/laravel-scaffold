@@ -30,4 +30,6 @@ class {{modelName}} extends Authenticatable implements MustVerifyEmail
     {
         $this->attributes['password'] = Hash::make($value);
     }
+
+    {{relationships}}
 }
