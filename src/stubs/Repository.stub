@@ -6,14 +6,14 @@ namespace {{namespace}};
 
 class {{modelName}}Repository
 {
-    public function getAll()
+      public function getAll()
     {
-        return {{modelName}}::all();
+        return {{fetchStr}}
     }
 
     public function getById($id)
     {
-        return {{modelName}}::findOrFail($id);
+        return {{fetchSingleStr}}
     }
 
     public function create(array $data)

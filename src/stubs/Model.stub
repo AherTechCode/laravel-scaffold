@@ -12,4 +12,6 @@ class {{modelName}} extends Model
     protected $fillable = [
         {{fillable}}
     ];
+
+    {{relationships}}
 }
