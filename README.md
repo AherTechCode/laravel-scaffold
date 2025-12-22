@@ -198,7 +198,13 @@ Planned improvements include:
 
 ## Contributing
 
-Issues, ideas, and pull requests are welcome.
+This project is actively maintained and opinionated by the author.
+
+- Bug reports and feature discussions are welcome via Issues
+- Pull requests should be discussed first before implementation
+- Architectural changes will be evaluated carefully to maintain consistency
+
+The goal is to keep the tool stable, predictable, and production-ready.
 
 ---
 
