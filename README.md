@@ -206,6 +206,12 @@ This project is actively maintained and opinionated by the author.
 
 The goal is to keep the tool stable, predictable, and production-ready.
 
+## Project Governance
+
+Laravel Scaffold follows a Benevolent Dictator For Life (BDFL) model.
+The maintainer retains final decision-making authority to ensure
+long-term consistency and quality.
+
 ---
 
 ## License
