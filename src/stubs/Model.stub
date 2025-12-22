@@ -13,5 +13,8 @@ class {{modelName}} extends Model
         {{fillable}}
     ];
 
+    protected $hidden = [{{hidden}}];
+    protected $cast = [{{$cast}}];
+
     {{relationships}}
 }
