@@ -1,65 +1,219 @@
-# Laravel Scaffold
+# Laravel Scaffold — Spec-Driven API Scaffolding for Laravel
 
-Laravel Scaffold is a powerful artisan command package designed to streamline the process of generating boilerplate code for CRUD operations in your Laravel applications. With the ability to create models, controllers, services, repositories, and import classes, this package enhances your productivity by automating repetitive tasks.
+> Stop rewriting CRUD. Define your backend once, generate everything else.
 
-### Features
+**Laravel Scaffold** is a developer productivity tool that generates **production-ready Laravel APIs** from either:
+- an **existing database**, or
+- a **simple human-readable spec file**
 
-* **CRUD Generation**: Quickly scaffold models, controllers, services, and repositories with just a single command.
-* **Modular Support**: Optionally organize your code into modules for better structure in larger applications.
-* **Mass Upload Functionality**: Easily handle bulk data imports from CSV or Excel files using integrated import classes.
-* **Customizable Stubs**: Publish and customize stub files to fit your coding style and project requirements.
+It is designed for developers and teams who build **many backends**, not demos.
 
-### Installation
+✅ Used in production  
+✅ Spec-driven & DB-driven  
+✅ Clean architecture (Services, Repositories, Requests)  
+✅ Safe, fast, and extensible  
 
-To get started, simply require the package via Composer:
+---
 
-`composer require ahert/laravel-scaffold`
+## Why This Exists
 
-Then, publish the stubs for customization:
+If you’ve built more than a few Laravel applications, you already know the pattern:
 
-`php artisan vendor:publish --tag=stubs`
+- Create models  
+- Write migrations  
+- Build repositories  
+- Add services  
+- Repeat validation rules  
+- Repeat again on the next project  
 
-### Usage
+This tool exists to **eliminate that repetition**.
 
-run `php artisan list` to see the list of available commands `laravel-scaffold` should in the list. If you sight `laravel-scaffold` in the list of available commands then you are good to go.
+Instead of writing structure over and over, you define **intent once**, and let the tool generate consistent, maintainable code.
 
-As of the initial release `laravel-scaffold` assumes that you already have the database for your application carefully designed and implemented with all necessary indexes, keys and relationships put in place.
+---
 
-Setup the database parameters within you `.env` file before proceeding to use `laravel-scaffold`. With that said and ensure you can then start working on you application.
+## Installation
 
-Then to scaffold Controller, Service, Repository and Model for a particular entity (table) run this command:
+```bash
+composer require ahertl/laravel-scaffold
+```
 
-`php artisan laravel:scaffold User --table=users`
+---
 
-the command above assumes there is an existing `users` which will be looked up and the structure (columns and other properties) of the read to be able to create the various piece of code required to have a functional application. There are other optional flags that can be passed into the command.
+## Two Ways to Use It
 
-`--mass_upload`: this will scaffold an additional function to handle mass upload of data to the database table from `csv`, `xls`, and `xlsx` files. Tab separated values would be include in future release.
+### 1️⃣ Database-First Scaffolding (Legacy or Existing Projects)
 
-`--module`: this will modularise your application
+Generate a full CRUD API directly from an existing table:
 
-`php artisan laravel:scaffold User --module=User --table=users --mass_upload`
+```bash
+php artisan laravel:scaffold User --table=users --routes
+```
 
-Here is the folder/directory structure for a simple application not made into modules.
+This generates:
+- Model
+- Repository
+- Service
+- Controller
+- Optional routes
 
-![1729777914016](image/README/1729777914016.png)
+Perfect for:
+- legacy systems
+- modernizing old databases
+- inherited projects
 
-The directory structure for a modularized application
+---
 
-![1729778031062](image/README/1729778031062.png)
+### 2️⃣ Spec-Driven Scaffolding (Recommended)
 
-`"repositories":[
-    {
-        "type":"path",
-        "url":"/home/netplus/Documents/Abayomi/AHERTL/laravel-scaffold","options":{
-            "symlink":true
-        }
-    }
-]`
+Define your backend using a **simple text spec**:
 
-Update token for packagist webhook.
+```text
+user:
+- name string required
+- email string required unique
+- password string hidden
 
-### Changes
-There is an update on the command that now make all generated code to work seamless. You can now generate and use your code immediately without any any changes.
-You will only need to add your business logic on the application. The CRUD operation on all table now work out of the box, with the option of uploads.
+book:
+- title string
+- isbn string unique
+- authorId number
+```
 
-You might need to add some null null coalescing on the rows for the import class to take care of table columns that are nullable and would not necessarily be provide by the user in the uploaded file.
+Generate everything:
+
+```bash
+php artisan laravel:scaffold --spec=api.spec --migration
+```
+
+---
+
+## What Gets Generated
+
+From a single spec, Laravel Scaffold can generate:
+
+- ✅ Eloquent models (fillable & hidden handled)
+- ✅ Services & repositories
+- ✅ Controllers
+- ✅ Form Request validation classes
+- ✅ Database migrations
+- ✅ API routes (optional)
+
+You can also generate **only migrations**:
+
+```bash
+php artisan laravel:scaffold --spec=api.spec --migration-only
+```
+
+---
+
+## Why Spec-Driven?
+
+Spec-driven development ensures:
+
+- Database schema
+- Validation rules
+- API structure
+
+…all come from **one source of truth**.
+
+This dramatically reduces:
+- bugs
+- inconsistencies
+- onboarding time
+
+---
+
+## Dry-Run Mode (Safe by Default)
+
+Preview what will be generated **without writing files**:
+
+```bash
+php artisan laravel:scaffold --spec=api.spec --dry-run
+```
+
+---
+
+## Example Output Structure
+
+```
+app/
+ ├── Models/User.php
+ ├── Services/UserService.php
+ ├── Repositories/UserRepository.php
+ ├── Http/
+ │   ├── Controllers/UserController.php
+ │   └── Requests/
+ │       ├── StoreUserRequest.php
+ │       └── UpdateUserRequest.php
+database/
+ └── migrations/
+```
+
+---
+
+## When This Tool Shines
+
+Laravel Scaffold is ideal if you:
+
+- Build multiple Laravel backends
+- Work on ERP, SaaS, or internal systems
+- Want consistent architecture across projects
+- Are tired of rewriting CRUD
+- Want faster backend delivery without shortcuts
+
+---
+
+## Production Use
+
+This tool has been used in **multiple real-world projects** to:
+- speed up backend delivery
+- standardize API structure
+- reduce boilerplate and human error
+
+---
+
+## Philosophy
+
+This is **not** a “magic CRUD generator”.
+
+It enforces:
+- separation of concerns
+- explicit structure
+- predictable output
+
+You stay in control — the tool just removes the busy work.
+
+---
+
+## Roadmap
+
+Planned improvements include:
+- foreign key detection
+- richer spec syntax (`string:150`, `default:true`)
+- OpenAPI generation
+- frontend SDK scaffolding
+
+---
+
+## Contributing
+
+This project is actively maintained and opinionated by the author.
+
+- Bug reports and feature discussions are welcome via Issues
+- Pull requests should be discussed first before implementation
+- Architectural changes will be evaluated carefully to maintain consistency
+
+The goal is to keep the tool stable, predictable, and production-ready.
+
+## Project Governance
+
+Laravel Scaffold follows a Benevolent Dictator For Life (BDFL) model.
+The maintainer retains final decision-making authority to ensure
+long-term consistency and quality.
+
+---
+
+## License
+
+MIT
