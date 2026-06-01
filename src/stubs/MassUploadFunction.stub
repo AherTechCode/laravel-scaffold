@@ -1,14 +1,15 @@
 public function massUpload(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,xls,xlsx|max:2048',
+            '{{uploadField}}' => 'required|file|mimes:{{uploadMimes}}|max:{{uploadMax}}',
         ]);
 
-        $file = $request->file('file');
+        $file = $request->file('{{uploadField}}');
         $uploaded = $this->service->massUpload($file);
 
-        if ($uploaded) {
-            return response()->json(['message' => 'Mass upload successful'], 200);
+        if ($uploaded === true) {
+            return response()->json(['message' => '{{modelName}} upload successful'], 200);
         }
-        return response()->json(['message' => 'Mass upload failed'], 500);
+
+        return response()->json(['message' => '{{modelName}} upload failed', 'error' => $uploaded], 422);
     }

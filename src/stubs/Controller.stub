@@ -5,6 +5,7 @@ namespace {{namespace}};
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 {{importService}}
+{{requestImports}}
 
 class {{modelName}}Controller extends Controller
 {
@@ -25,15 +26,15 @@ class {{modelName}}Controller extends Controller
         return response()->json($this->service->getById($id));
     }
 
-    public function store(Request $request)
+    public function store({{storeRequest}} $request)
     {
-        $data = $request->all();
+        $data = {{storeData}};
         return response()->json($this->service->create($data));
     }
 
-    public function update(Request $request, $id)
+    public function update({{updateRequest}} $request, $id)
     {
-        $data = $request->all();
+        $data = {{updateData}};
         return response()->json($this->service->update($id, $data));
     }
 
@@ -53,4 +54,5 @@ class {{modelName}}Controller extends Controller
     }
 
     {{massUploadFunction}}
+    {{commandActions}}
 }

@@ -2,7 +2,7 @@
 
 namespace {{namespace}};
 
-use Maatwebsite\Excel\Facades\Excel;
+{{excelImport}}
 {{serviceImports}}
 
 class {{modelName}}Service
@@ -26,31 +26,46 @@ class {{modelName}}Service
 
     public function create(array $data)
     {
-        return $this->repository->create($data);
+        $this->assertBusinessRules('create', $data);
+        $record = $this->repository->create($data);
+        $this->dispatchDomainEvent('{{modelName}}Created', ['record' => $record]);
+        return $record;
     }
 
     public function update($id, array $data)
     {
-        return $this->repository->update($id, $data);
+        $record = $this->repository->getById($id);
+        $this->assertBusinessRules('update', $data, $record);
+        $record = $this->repository->update($id, $data);
+        $this->dispatchDomainEvent('{{modelName}}Updated', ['record' => $record]);
+        return $record;
     }
 
     public function delete($id)
     {
-        return $this->repository->delete($id);
+        $record = $this->repository->getById($id);
+        $this->assertBusinessRules('delete', [], $record);
+        $deleted = $this->repository->delete($id);
+        $this->dispatchDomainEvent('{{modelName}}Deleted', ['record' => $record]);
+        return $deleted;
     }
 
-    public function massUpload($file)
-    {
-        try {
-            Excel::import(new {{modelName}}Import, $file);
-            return true;
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
+    {{massUploadMethod}}
 
     public function search($column, $value)
     {
         return $this->repository->search($column, $value);
     }
+
+    protected function assertBusinessRules(string $action, array $data = [], $record = null): void
+    {
+        {{businessRuleChecks}}
+    }
+
+    protected function dispatchDomainEvent(string $eventName, array $payload = []): void
+    {
+        event($eventName, $payload);
+    }
+
+    {{commandMethods}}
 }

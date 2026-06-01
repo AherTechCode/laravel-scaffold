@@ -26,6 +26,7 @@ student table:students softDeletes:
 - passportPath string:255 nullable
 
 score table:scores:
+@upload field:file mimes:csv,xls,xlsx max:4096
 - schoolId foreignId:schools required cascadeOnDelete
 - studentId foreignId:students required cascadeOnDelete
 - subjectId foreignId:subjects required restrictOnDelete
@@ -47,3 +48,23 @@ payment table:payments:
 - currency string:3 default:NGN
 - status enum:pending,paid,failed,refunded default:pending index
 - paidAt datetime nullable
+
+resultPublication table:result_publications:
+@route result-publications
+@search studentName admissionNumber status
+@commands PublishResult SendResultToParent
+@events ResultPublished ResultSentToParent
+@state Draft Published Sent
+@transition Draft Published PublishResult ResultPublished
+@transition Published Sent SendResultToParent ResultSentToParent
+@rule PublishResult requires studentId approvedAt
+@rule SendResultToParent requires guardianEmail guardianPhone
+- schoolId foreignId:schools required cascadeOnDelete
+- studentId foreignId:students required cascadeOnDelete
+- status enum:Draft,Published,Sent default:Draft index
+- studentName string:150 required
+- admissionNumber string:60 required
+- guardianEmail string:191 nullable
+- guardianPhone string:30 nullable
+- approvedAt datetime nullable
+- sentAt datetime nullable

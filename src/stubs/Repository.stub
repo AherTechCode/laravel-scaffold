@@ -36,6 +36,12 @@ class {{modelName}}Repository
 
     public function search($column, $value)
     {
+        $allowedColumns = [{{searchableColumns}}];
+
+        if (! in_array($column, $allowedColumns, true)) {
+            throw new \InvalidArgumentException("Column [{$column}] is not searchable.");
+        }
+
         return {{modelName}}::where($column, 'like', '%' . $value . '%')->get();
     }
 }

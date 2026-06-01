@@ -114,6 +114,48 @@ payment table:payments:
 - paidAt datetime nullable
 ```
 
+Entity directives can add application intent beyond plain CRUD:
+
+```text
+resultPublication table:result_publications:
+@route result-publications
+@search studentName admissionNumber
+@commands PublishResult SendResultToParent
+@events ResultPublished ResultSentToParent
+@state Draft Published Sent
+@transition Draft Published PublishResult ResultPublished
+@transition Published Sent SendResultToParent ResultSentToParent
+@rule PublishResult requires studentId approvedAt
+@rule SendResultToParent requires guardianEmail guardianPhone
+- studentId foreignId:students required cascadeOnDelete
+- status enum:Draft,Published,Sent default:Draft
+- studentName string:150 required
+- admissionNumber string:60 required
+- guardianEmail string:191 nullable
+- guardianPhone string:30 nullable
+- approvedAt datetime nullable
+```
+
+Behavior directives generate Laravel extension points:
+
+- `@search` restricts repository search to allowed columns.
+- `@commands` creates service and controller methods for named business actions.
+- `@events` preserves event intent; CRUD methods also dispatch `ModelCreated`, `ModelUpdated`, and `ModelDeleted` events.
+- `@state` documents the allowed state set.
+- `@transition From To Command Event` creates command methods that validate and apply state transitions when a `status` or `state` field exists.
+- `@rule Command requires fieldA fieldB` creates precondition checks before generated command methods run.
+- `@route` customizes generated route prefixes when `--routes` is used.
+- `@upload` opts an entity into end-to-end Excel/CSV upload generation. Without it, no import class, upload controller method, upload service method, or upload route is generated.
+
+Upload accepts optional settings:
+
+```text
+score:
+@upload field:file mimes:csv,xls,xlsx max:4096
+- studentId foreignId:students required
+- total decimal:5,2 required
+```
+
 Supported field types include:
 
 ```text
@@ -129,7 +171,7 @@ Supported field modifiers include:
 required, nullable, unique, index, default:value, unsigned,
 constrained, constrained:table, references:table,
 cascadeOnDelete, nullOnDelete, restrictOnDelete, cascadeOnUpdate,
-hidden
+hidden, nativeEnum
 ```
 
 Supported entity modifiers include:
@@ -137,6 +179,67 @@ Supported entity modifiers include:
 ```text
 table:custom_table_name, softDeletes
 ```
+
+### Database-Agnostic Spec Mode
+
+Spec-driven scaffolding is intentionally database-agnostic. It does not inspect the active database connection and generated migrations use Laravel's Schema Builder instead of driver-specific SQL.
+
+For portability, `enum:a,b,c` generates a `string` column and an `in:a,b,c` validation rule by default. If you explicitly want a native database enum column, add the `nativeEnum` modifier:
+
+```text
+payment:
+- status enum:pending,paid,failed default:pending
+- providerStatus enum:pending,paid,failed nativeEnum default:pending
+```
+
+Database-first scaffolding may still use driver-specific introspection depending on your database driver. Use spec mode when you need portable migrations across MySQL, PostgreSQL, SQLite, and other Laravel-supported databases.
+
+---
+
+### Modular Monolith Output
+
+Standard Laravel output remains the default. To generate module-scoped code from a spec, assign entities to modules:
+
+```text
+@app architecture:modular
+
+module Academics:
+student table:students:
+- firstName string:100 required
+- lastName string:100 required
+
+module Billing:
+payment table:payments:
+@upload field:file mimes:csv,xls,xlsx max:4096
+- reference string:80 required unique
+- amount decimal:12,2 required
+- status enum:pending,paid,failed default:pending
+```
+
+You can also assign a module on an entity:
+
+```text
+student module:Academics table:students:
+- firstName string:100 required
+```
+
+Or with a directive:
+
+```text
+student table:students:
+@module Academics
+- firstName string:100 required
+```
+
+Modular generation writes files under `app/Modules/{Module}` and registers each module route file through the application's root `routes/api.php`, so fresh Laravel 11/12 apps can discover the routes.
+
+Database-first scaffolding also supports modular output:
+
+```bash
+php artisan laravel:scaffold Student --table=students --module=Academics --routes
+```
+
+When the provided table does not match Laravel's conventional model table name, the generated model includes `protected $table = '...'`.
 
 ---
 

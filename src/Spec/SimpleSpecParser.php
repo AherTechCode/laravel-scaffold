@@ -15,6 +15,8 @@ class SimpleSpecParser
         $lines = file($path, FILE_IGNORE_NEW_LINES);
         $entities = [];
         $current = null;
+        $currentModule = null;
+        $appOptions = [];
 
         foreach ($lines as $index => $line) {
             $line = trim($line);
@@ -23,8 +25,37 @@ class SimpleSpecParser
                 continue;
             }
 
+            if (str_starts_with($line, '@')) {
+                if (! $current) {
+                    $directive = $this->parseDirective($line, $index + 1);
+
+                    if ($directive['name'] === 'app') {
+                        $appOptions = array_merge($appOptions, $this->parseOptions($directive['values']));
+                        continue;
+                    }
+
+                    throw new \RuntimeException("Directive defined before entity at line ".($index + 1));
+                }
+
+                $directive = $this->parseDirective($line, $index + 1);
+                $entities[$current]['directives'][$directive['name']][] = $directive['values'];
+                continue;
+            }
+
+            if (preg_match('/^module\s+([a-zA-Z0-9_\-]+)\s*:$/i', $line, $matches)) {
+                $currentModule = Str::studly($matches[1]);
+                $current = null;
+                continue;
+            }
+
+            if (in_array(strtolower($line), ['endmodule', 'end module'], true)) {
+                $currentModule = null;
+                $current = null;
+                continue;
+            }
+
             if (str_ends_with($line, ':') && ! str_starts_with($line, '-')) {
-                [$current, $entity] = $this->parseEntity($line, $index + 1);
+                [$current, $entity] = $this->parseEntity($line, $index + 1, $appOptions, $currentModule);
                 $entities[$current] = $entity;
                 continue;
             }
@@ -53,7 +84,7 @@ class SimpleSpecParser
         return $entities;
     }
 
-    protected function parseEntity(string $line, int $lineNumber): array
+    protected function parseEntity(string $line, int $lineNumber, array $appOptions = [], ?string $currentModule = null): array
     {
         $definition = trim(rtrim($line, ':'));
         $parts = preg_split('/\s+/', $definition);
@@ -63,14 +94,34 @@ class SimpleSpecParser
         }
 
         $model = Str::studly(array_shift($parts));
+        $options = array_merge($appOptions, $this->parseOptions($parts));
+
+        if ($currentModule && ! isset($options['module'])) {
+            $options['module'] = $currentModule;
+        }
 
         return [
             $model,
             [
-                'options' => $this->parseOptions($parts),
+                'options' => $options,
+                'directives' => [],
                 'fields' => [],
                 'field_names' => [],
             ],
+        ];
+    }
+
+    protected function parseDirective(string $line, int $lineNumber): array
+    {
+        $parts = preg_split('/\s+/', trim(ltrim($line, '@')));
+
+        if (! $parts || $parts[0] === '') {
+            throw new \RuntimeException("Invalid directive definition at line {$lineNumber}.");
+        }
+
+        return [
+            'name' => Str::camel(array_shift($parts)),
+            'values' => $parts,
         ];
     }
 
