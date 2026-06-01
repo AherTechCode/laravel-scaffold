@@ -86,6 +86,58 @@ Generate everything:
 php artisan laravel:scaffold --spec=api.spec --migration
 ```
 
+### Rich Spec Syntax
+
+The original simple syntax still works, but richer migration-focused specs are also supported:
+
+```text
+school table:schools softDeletes:
+- schoolName string:150 required
+- contactEmail string:191 required unique
+- contactPhone string:30 nullable index
+- isActive boolean default:true
+
+student table:students softDeletes:
+- schoolId foreignId:schools required cascadeOnDelete
+- admissionNumber string:60 required unique
+- firstName string:100 required
+- lastName string:100 required
+- middleName string:100 nullable
+- gender enum:male,female nullable
+- meta json nullable
+
+payment table:payments:
+- schoolId foreignId:schools required cascadeOnDelete
+- parentId foreignId:parents required cascadeOnDelete
+- amount decimal:12,2 required
+- status enum:pending,paid,failed default:pending index
+- paidAt datetime nullable
+```
+
+Supported field types include:
+
+```text
+string, text, mediumText, longText, integer, int, number,
+bigInteger, unsignedBigInteger, foreignId, boolean, bool,
+date, datetime, timestamp, time, decimal, float, double,
+json, uuid, ulid, enum
+```
+
+Supported field modifiers include:
+
+```text
+required, nullable, unique, index, default:value, unsigned,
+constrained, constrained:table, references:table,
+cascadeOnDelete, nullOnDelete, restrictOnDelete, cascadeOnUpdate,
+hidden
+```
+
+Supported entity modifiers include:
+
+```text
+table:custom_table_name, softDeletes
+```
+
 ---
 
 ## What Gets Generated

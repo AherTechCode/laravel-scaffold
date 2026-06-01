@@ -66,23 +66,69 @@ class LaravelScaffoldCommand extends Command
         )->implode(",\n        ");
     }
 
+    protected function hasFieldOption(array $field, string $option): bool {
+        return array_key_exists($option, $field['options'] ?? [])
+            || in_array($option, $field['mods'] ?? [], true);
+    }
+
+    protected function fieldOption(array $field, string $option, mixed $default = null): mixed {
+        return $field['options'][$option] ?? $default;
+    }
+
+    protected function entityOption(array $entity, string $option, mixed $default = null): mixed {
+        return $entity['options'][$option] ?? $default;
+    }
+
+    protected function phpValue(mixed $value): string {
+        if ($value === true || $value === 'true') {
+            return 'true';
+        }
+
+        if ($value === false || $value === 'false') {
+            return 'false';
+        }
+
+        if ($value === null || $value === 'null') {
+            return 'null';
+        }
+
+        if (is_numeric($value)) {
+            return (string) $value;
+        }
+
+        return "'" . addslashes((string) $value) . "'";
+    }
 
     protected function mapValidationRules(array $field): array {
         $rules = [];
 
         $rules[] = match ($field['type']) {
-            'string' => 'string',
+            'string', 'text', 'mediumtext', 'longtext', 'uuid', 'ulid' => 'string',
             'number', 'int', 'integer' => 'integer',
+            'decimal', 'float', 'double' => 'numeric',
             'boolean', 'bool' => 'boolean',
-            default => 'string',
+            'date', 'datetime', 'timestamp' => 'date',
+            'json' => 'array',
+            default => $field['type'] === 'foreignid' ? 'integer' : 'string',
         };
 
-        if (in_array('required', $field['mods'])) {
+        if ($this->hasFieldOption($field, 'required')) {
             $rules[] = 'required';
         }
 
-        if (in_array('unique', $field['mods'])) {
-            $rules[] = "unique:{$this->currentTable},{$field['name']}";
+        if ($this->hasFieldOption($field, 'nullable')) {
+            $rules[] = 'nullable';
+        }
+
+        if ($field['type'] === 'string' && isset($field['args'][0]) && is_numeric($field['args'][0])) {
+            $rules[] = "max:{$field['args'][0]}";
+        }
+
+        if ($this->hasFieldOption($field, 'unique')) {
+            $unique = $this->fieldOption($field, 'unique', true);
+            $rules[] = $unique === true
+                ? "unique:{$this->currentTable},{$field['name']}"
+                : "unique:{$unique}";
         }
 
         return $rules;
@@ -107,28 +153,76 @@ class LaravelScaffoldCommand extends Command
 
 
     protected function buildMigrationLine(array $field) : string {
+        $args = $field['args'] ?? [];
+
         $line = match ($field['type']) {
-            'string' => "\$table->string('{$field['name']}')",
+            'string' => isset($args[0]) && is_numeric($args[0])
+                ? "\$table->string('{$field['name']}', {$args[0]})"
+                : "\$table->string('{$field['name']}')",
+            'text' => "\$table->text('{$field['name']}')",
+            'mediumtext' => "\$table->mediumText('{$field['name']}')",
+            'longtext' => "\$table->longText('{$field['name']}')",
             'number', 'int', 'integer' => "\$table->integer('{$field['name']}')",
+            'biginteger' => "\$table->bigInteger('{$field['name']}')",
+            'unsignedbiginteger' => "\$table->unsignedBigInteger('{$field['name']}')",
+            'foreignid' => "\$table->foreignId('{$field['name']}')",
             'boolean', 'bool' => "\$table->boolean('{$field['name']}')",
             'date' => "\$table->date('{$field['name']}')",
             'datetime' => "\$table->dateTime('{$field['name']}')",
+            'timestamp' => "\$table->timestamp('{$field['name']}')",
+            'time' => "\$table->time('{$field['name']}')",
+            'decimal' => "\$table->decimal('{$field['name']}', " . ($args[0] ?? 8) . ", " . ($args[1] ?? 2) . ")",
+            'float' => "\$table->float('{$field['name']}')",
+            'double' => "\$table->double('{$field['name']}')",
+            'json' => "\$table->json('{$field['name']}')",
+            'uuid' => "\$table->uuid('{$field['name']}')",
+            'ulid' => "\$table->ulid('{$field['name']}')",
+            'enum' => "\$table->enum('{$field['name']}', [" . collect($args)->map(fn ($value) => $this->phpValue($value))->implode(', ') . "])",
             default => "\$table->string('{$field['name']}')",
         };
 
-        // 👇 THIS IS WHERE unique BELONGS
-        if (in_array('unique', $field['mods'])) {
+        if ($field['type'] === 'foreignid') {
+            $reference = $this->fieldOption($field, 'references')
+                ?? $this->fieldOption($field, 'constrained')
+                ?? (($field['args'] ?? [])[0] ?? null);
+
+            if ($reference === true) {
+                $line .= "->constrained()";
+            } elseif ($reference) {
+                $line .= "->constrained('{$reference}')";
+            }
+        }
+
+        if ($this->hasFieldOption($field, 'unsigned') && ! str_contains($line, 'unsigned')) {
+            $line .= "->unsigned()";
+        }
+
+        if ($this->hasFieldOption($field, 'unique')) {
             $line .= "->unique()";
         }
 
-        if (in_array('nullable', $field['mods'])) {
+        if ($this->hasFieldOption($field, 'index')) {
+            $line .= "->index()";
+        }
+
+        if ($this->hasFieldOption($field, 'nullable')) {
             $line .= "->nullable()";
+        }
+
+        if ($this->hasFieldOption($field, 'default')) {
+            $line .= "->default(" . $this->phpValue($this->fieldOption($field, 'default')) . ")";
+        }
+
+        foreach (['cascadeOnDelete', 'nullOnDelete', 'restrictOnDelete', 'cascadeOnUpdate'] as $foreignModifier) {
+            if ($this->hasFieldOption($field, $foreignModifier)) {
+                $line .= "->{$foreignModifier}()";
+            }
         }
 
         return $line . ";";
     }
 
-    protected function generateMigrationFromSpec( string $model, string $table, array $fields) : void {
+    protected function generateMigrationFromSpec( string $model, string $table, array $fields, array $entity = []) : void {
         $timestamp = date('Y_m_d_His');
         $className = "Create" . Str::studly($table) . "Table";
         $fileName = "{$timestamp}_create_{$table}_table.php";
@@ -137,6 +231,10 @@ class LaravelScaffoldCommand extends Command
         $columns = collect($fields)
             ->map(fn ($field) => "            " . $this->buildMigrationLine($field))
             ->implode("\n");
+
+        if ($this->entityOption($entity, 'softDeletes', false)) {
+            $columns .= "\n            \$table->softDeletes();";
+        }
 
         $stub = $this->loadStub('Migration.stub');
 
@@ -154,12 +252,15 @@ class LaravelScaffoldCommand extends Command
         $parser = new SimpleSpecParser();
         $entities = $parser->parse($specPath);
 
-        foreach($entities as $model => $fields) {
-            $table = Str::plural(Str::snake($model));
+        foreach($entities as $model => $entity) {
+            $fields = $entity['fields'];
+            $table = $this->sanitizeTable(
+                $this->entityOption($entity, 'table') ?: Str::plural(Str::snake($model))
+            );
             $this->currentTable = $table;
 
             if ($this->option('migration') || $this->option('migration-only')) {
-                $this->generateMigrationFromSpec($model, $table, $fields);
+                $this->generateMigrationFromSpec($model, $table, $fields, $entity);
             }
 
             if ($this->option('migration-only')) {
@@ -293,19 +394,79 @@ class LaravelScaffoldCommand extends Command
         };
     }
 
+    protected function isSchemaColumnList(array $columns): bool {
+        return ! empty($columns) && is_object($columns[0]) && property_exists($columns[0], 'COLUMN_NAME');
+    }
+
+    protected function columnNames(array $columns): array {
+        if ($this->isSchemaColumnList($columns)) {
+            return array_map(fn ($item) => $item->COLUMN_NAME, $columns);
+        }
+
+        return $columns;
+    }
+
+    protected function buildSpecRelationships(array $specFields): string {
+        return collect($specFields)
+            ->filter(fn ($field) => $field['type'] === 'foreignid')
+            ->map(function ($field) {
+                $reference = $this->fieldOption($field, 'references')
+                    ?? $this->fieldOption($field, 'constrained')
+                    ?? (($field['args'] ?? [])[0] ?? null);
+
+                $relation = Str::camel(Str::beforeLast($field['name'], '_id'));
+                $className = $reference
+                    ? Str::studly(Str::singular($reference))
+                    : Str::studly(Str::beforeLast($field['name'], '_id'));
+
+                return "
+    public function {$relation}() {
+        return \$this->belongsTo({$className}::class, '{$field['name']}');
+    }
+            ";
+            })
+            ->implode("\n");
+    }
+
+    protected function generateCasts(array $fields): string {
+        return collect($fields)
+            ->map(function ($field) {
+                $cast = match ($field['type']) {
+                    'boolean', 'bool' => 'boolean',
+                    'number', 'int', 'integer', 'biginteger', 'unsignedbiginteger', 'foreignid' => 'integer',
+                    'decimal' => isset($field['args'][1]) ? "decimal:{$field['args'][1]}" : 'decimal:2',
+                    'float', 'double' => 'float',
+                    'date' => 'date',
+                    'datetime', 'timestamp' => 'datetime',
+                    'json' => 'array',
+                    default => null,
+                };
+
+                return $cast ? "'{$field['name']}' => '{$cast}'" : null;
+            })
+            ->filter()
+            ->implode(",\n        ");
+    }
+
 
     protected function createModel($basePath, $model, $cols, $isModular, $module, $specFields = null)
     {
         $relationships = "";
-        $fkFields = array_map(fn($col) => $col->COLUMN_NAME, array_filter($cols, fn($col) => $col->COLUMN_KEY == "MUL"));
-        if (sizeof($fkFields) > 0) {
+        if ($specFields) {
+            $relationships = $this->buildSpecRelationships($specFields);
+        } elseif ($this->isSchemaColumnList($cols)) {
+            $fkFields = array_map(fn($col) => $col->COLUMN_NAME, array_filter($cols, fn($col) => $col->COLUMN_KEY == "MUL"));
+            if (sizeof($fkFields) > 0) {
             $relationships .= implode("\n", array_map(fn($item)=>"
     public function ".$this->makefnName($model, $item)."() {
         return \$this->belongsTo(".implode(", ", $this->makeClassName($model, $item)).");
     }
             ", $fkFields));
+            }
         }
-        $columns = $specFields ? array_column($specFields, 'name') : array_filter(array_map(fn($item) => $item->COLUMN_NAME, $cols), fn($item) => !in_array($item, $this->exemptColumn));
+        $columns = $specFields
+            ? array_column($specFields, 'name')
+            : array_filter($this->columnNames($cols), fn($item) => !in_array($item, $this->exemptColumn));
         $namespace = $isModular ? "App\\Modules\\{$module}\\Models" : "App\\Models";
         $modelStub = ($model == "User") ? $this->loadStub('UserModel.stub') : $this->loadStub('Model.stub');
         $fillable = $this->generateFillable($columns);
@@ -317,10 +478,12 @@ class LaravelScaffoldCommand extends Command
                 }
             }
         }
+        $hidden = implode(", ", array_map(fn ($field) => "'{$field}'", $hidden));
+        $casts = $specFields ? $this->generateCasts($specFields) : '';
 
         $modelContent = str_replace(
-            ['{{modelName}}', '{{namespace}}', '{{fillable}}','{{hidden}}','{{relationships}}'],
-            [$model, $namespace, $fillable, $hidden, $relationships],
+            ['{{modelName}}', '{{namespace}}', '{{fillable}}','{{hidden}}','{{casts}}','{{relationships}}'],
+            [$model, $namespace, $fillable, $hidden, $casts, $relationships],
             $modelStub
         );
 
@@ -350,7 +513,9 @@ class LaravelScaffoldCommand extends Command
     {
         $fetchStr = "";
         $fetchSingleStr = "";
-        $fkFields = array_map(fn($col) => $col->COLUMN_NAME, array_filter($columns, fn($col) => $col->COLUMN_KEY == "MUL"));
+        $fkFields = $this->isSchemaColumnList($columns)
+            ? array_map(fn($col) => $col->COLUMN_NAME, array_filter($columns, fn($col) => $col->COLUMN_KEY == "MUL"))
+            : [];
         if(sizeof($fkFields) > 0) {
             $fetchStr .= " $model::with([".implode(", ", array_map(fn($item) => "'".$this->makefnName($model, $item)."'", $fkFields))."])->get();";
             $fetchSingleStr .= " $model::with([".implode(", ", array_map(fn($item) => "'".$this->makefnName($model,$item)."'", $fkFields))."])->findOrFail(\$id);";
@@ -450,7 +615,7 @@ class LaravelScaffoldCommand extends Command
 
     protected function generateColumnMappings($cols)
     {
-        $columns = array_map(fn($item) => $item->COLUMN_NAME, $cols);
+        $columns = $this->columnNames($cols);
         return implode(",\n            ", array_map(function ($col) {
             return "'$col' => \$row['$col']";
         }, $columns));
